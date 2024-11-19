@@ -2,7 +2,7 @@ import os
 import cv2
 from ultralytics import YOLO
 
-input_folder = 'datasets\\dataset_test_FACS'
+input_folder = 'datasets\\dataset_test_FACS\\angry'
 
 model = YOLO('models\\yolov8_FACS.pt')
 
@@ -45,7 +45,7 @@ dag_emotions = {
     6: {'nos': "Zdenerwowany", 'else': 9},
     7: {'kly': "Neutralny", 'else': "Wesoly"},
     8: {'smutne_oczy': 13, 'else': 11},
-    9: {'grozne_oczy': "Zdenerwowany", 'else': 8},
+    9: {'grozne_oczy': "Zdenerwowany", 'else': 16},
     10: {'wesole_oczy': "Wesoly", 'else': 3},
     11: {'uszy_przod': 14, 'else': "Neutralny"},
     12: {'uszy_przod': "Smutny", 'else': 15},
@@ -55,7 +55,12 @@ dag_emotions = {
         'else': "Raczej smutny"
     },
     14: {'usta': "Smutny", 'else': "Neutralny"},
-    15: {'usta': "Smutny", 'else': "Neutralny"}
+    15: {'usta': "Smutny", 'else': "Neutralny"},
+    16: {
+        'condition': lambda x: (x['kly'] and all(not x[key] for key in x if key != 'kly')),
+        'true': "Raczej zdenerwowany",
+        'else': 8
+    }
 }
 
 
