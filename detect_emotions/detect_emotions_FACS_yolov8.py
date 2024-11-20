@@ -2,21 +2,31 @@ import os
 import cv2
 from ultralytics import YOLO
 
-input_folder = 'datasets\\dataset_test_FACS\\happy'
+input_folder = 'datasets\\dataset_test_FACS\\angry'
 
 model = YOLO('models\\yolov8_FACS.pt')
 
 class_colors = {
-    0: (0, 255, 0),        # Green
-    1: (0, 100, 0),        # Dark Green
-    2: (255, 165, 0),      # Orange
-    3: (128, 128, 128),    # Gray
-    4: (173, 216, 230),    # Light Blue
-    5: (255, 0, 0),        # Red
-    6: (0, 0, 0),          # Black
-    7: (0, 255, 255),      # Yellow
-    8: (255, 102, 102),    # Light Red
-    9: (139, 69, 19),      # Brown
+    0: (0, 255, 0),
+    1: (0, 100, 0),
+    2: (0, 128, 255),
+    3: (255, 0, 0),
+    4: (255, 50, 255),
+    5: (0, 0, 255),
+    6: (255, 50, 150),
+    7: (0, 255, 255),
+    8: (0, 0, 100),
+    9: (255, 255, 50),
+}
+
+emotion_colors = {
+    "Wesoly": (0, 255, 0),
+    "Raczej wesoly": (144, 238, 144),
+    "Zdenerwowany": (0, 0, 255),
+    "Raczej zdenerwowany": (102, 102, 255),
+    "Smutny": (255, 0, 0),
+    "Raczej smutny": (255, 255, 0),
+    "Neutralny": (128, 128, 128)
 }
 
 class_names = {
@@ -64,8 +74,7 @@ dag_emotions = {
 }
 
 
-def get_AUs(image_path):
-    img = cv2.imread(image_path)
+def get_AUs(img):
     results = model(img)
 
     action_detections = []
@@ -88,7 +97,6 @@ def predict_emotion(features):
     current_node = 1
 
     while current_node is not None:
-        print(current_node)
         if isinstance(current_node, str):
             return current_node
 
@@ -113,31 +121,44 @@ def predict_emotion(features):
     return "Neutralny"
 
 
-def process_image(image_path, emotion):
+def process_image(image_path, action_features):
     img = cv2.imread(image_path)
+    action_detections = get_AUs(img)
 
-    results = model(img)
+    for detection in action_detections:
+        action_features[class_names[detection['label']]] = True
 
+    emotion = predict_emotion(action_features)
+
+    img_layer = img.copy()
+    alpha = 0.25
     font = cv2.FONT_HERSHEY_DUPLEX
-    font_scale = 1.5
-    thickness = 3
+    font_scale = 1
+    thickness = 1
     text_color = (169, 169, 169)
 
-    (text_width, text_height), _ = cv2.getTextSize(f"{emotion}", font, font_scale, thickness)
-    text_x = (img.shape[1] - text_width) // 2
-    text_y = text_height + 20
+    # colored
+    layer_color = emotion_colors.get(emotion)
 
-    cv2.rectangle(img, (text_x - 5, text_y - text_height - 5), (text_x + text_width + 5, text_y + 5), (0, 0, 0), thickness=cv2.FILLED)
+    cv2.rectangle(img_layer, (0, 0), (img.shape[1], img.shape[0]), layer_color, -1)
+    cv2.addWeighted(img_layer, alpha, img, 1 - alpha, 0, img)
+
+    # emotion text
+    (text_width, text_height), _ = cv2.getTextSize(f"{emotion}", font, font_scale, thickness)
+    text_x = 15
+    text_y = text_height + 15
+
+    # emotion text background
+    cv2.rectangle(img, (0, 0), (text_x + text_width + 15, text_y + 15), (0, 0, 0), thickness=cv2.FILLED)
     cv2.putText(img, f"{emotion}", (text_x, text_y), font, font_scale, text_color, thickness)
 
     happpy_labels = {0, 1, 4}
     angry_labels = {2, 5, 7, 8}
     sad_labels = {3, 6, 9}
 
-    for result in results[0].boxes:
+    for detection in action_detections:
 
-        label = int(result.cls[0].item())
-
+        label = detection['label']
         if (emotion == "Wesoly" or emotion == "Raczej wesoly") and label not in happpy_labels:
             break
         if (emotion == "Zdenerwowany" or emotion == "Raczej zdenerwowany") and label not in angry_labels:
@@ -147,20 +168,17 @@ def process_image(image_path, emotion):
         if emotion == "Neutralny":
             break
         else:
-            print(result.xyxy[0])
+            x1, y1, x2, y2 = detection['bbox']
+            confidence = detection['confidence']
 
-            x1, y1, x2, y2 = map(int, result.xyxy[0])
-            print(label)
-            confidence = result.conf[0]
+            # bbox text
             label_text = f"{model.names[label]}: {confidence:.2f}"
-
             color = class_colors.get(label, (255, 255, 255))
-
-            cv2.rectangle(img, (x1, y1), (x2, y2), color, 2)
-
             font_scale_box = 0.4
             thickness_box = 1
 
+            # bbox
+            cv2.rectangle(img, (x1, y1), (x2, y2), color, 2)
             (text_width, text_height), _ = cv2.getTextSize(label_text, font, font_scale_box, thickness_box)
             cv2.rectangle(img, (x1, y1 - text_height - 2), (x1 + text_width, y1 + 2), (0, 0, 0), thickness=cv2.FILLED)
             cv2.putText(img, label_text, (x1, y1 - 2), font, font_scale_box, color, thickness_box)
@@ -172,16 +190,7 @@ def process_image(image_path, emotion):
 
 for root, dirs, files in os.walk(input_folder):
     for filename in files:
-
-        action_features = {name: False for name in class_names.values()}
-
         if filename.endswith(('.jpg', '.png', '.jpeg', '.jfif')):
+            action_features = {name: False for name in class_names.values()}
             image_path = os.path.join(root, filename)
-            action_detections = get_AUs(image_path)
-
-            for detection in action_detections:
-                action_features[class_names[detection['label']]] = True
-
-            print(action_features)
-            emotion = predict_emotion(action_features)
-            process_image(image_path, emotion)
+            process_image(image_path, action_features)
