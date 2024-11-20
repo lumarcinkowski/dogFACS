@@ -2,7 +2,7 @@ import os
 import cv2
 from ultralytics import YOLO
 
-input_folder = 'datasets\\dataset_test_FACS\\angry'
+input_folder = 'datasets\\dataset_test_FACS\\happy'
 
 model = YOLO('models\\yolov8_FACS.pt')
 
@@ -110,7 +110,7 @@ def predict_emotion(features):
             else:
                 current_node = node_info['else']
 
-    return "Neeutralny"
+    return "Neutralny"
 
 
 def process_image(image_path, emotion):
@@ -130,22 +130,40 @@ def process_image(image_path, emotion):
     cv2.rectangle(img, (text_x - 5, text_y - text_height - 5), (text_x + text_width + 5, text_y + 5), (0, 0, 0), thickness=cv2.FILLED)
     cv2.putText(img, f"{emotion}", (text_x, text_y), font, font_scale, text_color, thickness)
 
+    happpy_labels = {0, 1, 4}
+    angry_labels = {2, 5, 7, 8}
+    sad_labels = {3, 6, 9}
+
     for result in results[0].boxes:
-        x1, y1, x2, y2 = map(int, result.xyxy[0])
+
         label = int(result.cls[0].item())
-        confidence = result.conf[0]
-        label_text = f"{model.names[label]}: {confidence:.2f}"
 
-        color = class_colors.get(label, (255, 255, 255))
+        if (emotion == "Wesoly" or emotion == "Raczej wesoly") and label not in happpy_labels:
+            break
+        if (emotion == "Zdenerwowany" or emotion == "Raczej zdenerwowany") and label not in angry_labels:
+            break
+        if (emotion == "Smutny" or emotion == "Raczej smutny") and label not in sad_labels:
+            break
+        if emotion == "Neutralny":
+            break
+        else:
+            print(result.xyxy[0])
 
-        cv2.rectangle(img, (x1, y1), (x2, y2), color, 2)
+            x1, y1, x2, y2 = map(int, result.xyxy[0])
+            print(label)
+            confidence = result.conf[0]
+            label_text = f"{model.names[label]}: {confidence:.2f}"
 
-        font_scale_box = 0.4
-        thickness_box = 1
+            color = class_colors.get(label, (255, 255, 255))
 
-        (text_width, text_height), _ = cv2.getTextSize(label_text, font, font_scale_box, thickness_box)
-        cv2.rectangle(img, (x1, y1 - text_height - 2), (x1 + text_width, y1 + 2), (0, 0, 0), thickness=cv2.FILLED)
-        cv2.putText(img, label_text, (x1, y1 - 2), font, font_scale_box, color, thickness_box)
+            cv2.rectangle(img, (x1, y1), (x2, y2), color, 2)
+
+            font_scale_box = 0.4
+            thickness_box = 1
+
+            (text_width, text_height), _ = cv2.getTextSize(label_text, font, font_scale_box, thickness_box)
+            cv2.rectangle(img, (x1, y1 - text_height - 2), (x1 + text_width, y1 + 2), (0, 0, 0), thickness=cv2.FILLED)
+            cv2.putText(img, label_text, (x1, y1 - 2), font, font_scale_box, color, thickness_box)
 
     cv2.imshow('Detection', img)
     cv2.waitKey(0)
@@ -167,13 +185,3 @@ for root, dirs, files in os.walk(input_folder):
             print(action_features)
             emotion = predict_emotion(action_features)
             process_image(image_path, emotion)
-
-
-
-
-
-
-
-
-
-
