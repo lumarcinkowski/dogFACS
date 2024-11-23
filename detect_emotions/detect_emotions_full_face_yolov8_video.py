@@ -2,9 +2,14 @@ import cv2
 from ultralytics import YOLO
 import os
 
-input_folder = 'datasets\\dataset_videos\\happy'
+input_folder = 'datasets\\dataset_videos\\sad'
 output_folder = 'output_videos'
 model = YOLO('models\\yolov8_full_face_classifier.pt')
+
+output_text_file = os.path.join(input_folder, "wyniki_full_face.txt")
+
+if os.path.exists(output_text_file):
+    os.remove(output_text_file)
 
 class_names = {
     0: "Zdenerwowany",
@@ -19,6 +24,37 @@ emotion_colors = {
     "Smutny": (255, 0, 0),
     "Neutralny": (128, 128, 128)
 }
+
+
+def emotion_sum_up(emotion_number, video_path):
+    total_frames = sum(emotion_number.values())
+
+    print(f"Podsumowanie emocji dla {os.path.basename(video_path)}:")
+
+    for emotion, count in emotion_number.items():
+        percentage = (count / total_frames) * 100 if total_frames > 0 else 0
+        print(f"{emotion}: {count} klatek ({percentage:.2f}%)")
+
+    sorted_emotions = sorted(emotion_number.items(), key=lambda x: x[1], reverse=True)
+
+    dominant_emotion, dominant_count = sorted_emotions[0]
+    dominant_percentage = (dominant_count / total_frames) * 100 if total_frames > 0 else 0
+
+    if len(sorted_emotions) > 1:
+        second_emotion, second_count = sorted_emotions[1]
+        second_percentage = (second_count / total_frames) * 100 if total_frames > 0 else 0
+    else:
+        second_emotion, second_percentage = None, 0
+
+    print(f"\nDOMINUJĄCA EMOCJA: {dominant_emotion} ({dominant_percentage:.2f}%)")
+
+    if second_emotion:
+        print(f"DRUGA EMOCJA: {second_emotion} ({second_percentage:.2f}%)")
+
+    with open(output_text_file, "a", encoding="utf-8") as f:
+        f.write(f"{os.path.basename(video_path)} {dominant_emotion} {dominant_percentage:.2f}% ")
+        if second_emotion:
+            f.write(f"{second_emotion} {second_percentage:.2f}%\n")
 
 
 def process_video(video_path, output_path):
@@ -86,12 +122,7 @@ def process_video(video_path, output_path):
     out.release()
     cv2.destroyAllWindows()
 
-    print(f"Podsumowanie emocji dla {os.path.basename(video_path)}:")
-    for emotion, count in emotion_counts.items():
-        print(f"{emotion}: {count} klatek")
-
-    dominant_emotion = max(emotion_counts, key=emotion_counts.get)
-    print(f"\nDOMINUJĄCA EMOCJA: {dominant_emotion}")
+    emotion_sum_up(emotion_counts, video_path)
 
 
 for video_file in os.listdir(input_folder):
