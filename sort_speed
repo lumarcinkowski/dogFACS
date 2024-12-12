@@ -1,0 +1,92 @@
+# Krok 3: Importowanie bibliotek
+import cv2
+from ultralytics import YOLO
+import numpy as np
+import matplotlib
+
+import time
+from sort import Sort  # Importowanie algorytmu SORT
+
+
+# Krok 3: Ustawienie kompatybilnego backendu matplotlib
+# Ustawienie kompatybilnego backendu matplotlib
+
+# Krok 5: Ści # Nazwa przesłanego pliku modelu
+video_path = '/content/test.mp4'  # Nazwa przesłanego pliku wideo
+model_path = '/content/yolov8_dogface_dataset1_80epochs_best (2).pt'
+# Krok 6: Wczytanie modelu YOLO
+dog_model = YOLO(model_path)
+
+# Krok 7: Otwórz plik wideo
+cap = cv2.VideoCapture(video_path)
+if not cap.isOpened():
+    print("Error: Could not open the video.")
+    exit()
+
+# Krok 8: Inicjalizacja zapisu wideo
+frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+out = cv2.VideoWriter('output_video.mp4', fourcc, 30.0, (frame_width, frame_height))
+
+# Krok 9: Inicjalizacja algorytmu SORT
+tracker = Sort()
+
+frame_count = 0
+total_time = 0
+
+# Pętla przetwarzania wideo
+while True:
+    start_time = time.perf_counter()
+
+    ret, frame = cap.read()
+    if not ret:
+        break
+
+    frame_count += 1
+    detections = []
+
+    # Wykrywanie psów za pomocą modelu YOLO
+    dog_results = dog_model(frame)
+    for result in dog_results:
+        for box in result.boxes:
+            if box.cls == 0 and box.conf[0] > 0.6:  # Klasa 0: pies
+                x1, y1, x2, y2 = map(int, box.xyxy[0])
+                confidence = box.conf[0]
+                detections.append([x1, y1, x2, y2, confidence])
+
+    # Konwersja detekcji do formatu numpy array dla SORT
+    if len(detections) > 0:
+        detections = np.array(detections)
+    else:
+        detections = np.empty((0, 5))  # Pusta macierz o odpowiednim kształcie
+
+    # Aktualizacja trackerów SORT
+    tracked_objects = tracker.update(detections)
+
+    # Rysowanie obiektów śledzonych
+    for obj in tracked_objects:
+        x1, y1, x2, y2, track_id = map(int, obj)
+        color = tuple(np.random.randint(0, 255, size=3).tolist())
+        cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+        cv2.putText(frame, f'ID: {track_id}', (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+
+    # Obliczanie czasu przetwarzania ramki
+    end_time = time.perf_counter()
+    frame_time = end_time - start_time
+    total_time += frame_time
+
+    # Zapis przetworzonej ramki do pliku
+    out.write(frame)
+
+# Obliczanie wydajności
+average_time_per_frame = total_time / frame_count
+fps = 1 / average_time_per_frame if average_time_per_frame > 0 else 0
+
+print(f"Average processing time per frame: {average_time_per_frame:.4f} seconds")
+print(f"FPS (Frames per second): {fps:.2f}")
+
+# Zwolnienie zasobów
+cap.release()
+out.release()
+
