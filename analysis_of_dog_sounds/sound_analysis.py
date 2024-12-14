@@ -5,8 +5,8 @@ import librosa
 import numpy as np
 import json
 
-# Ustawienie zmiennej środowiskowej, aby uniknąć problemów z OpenMP
-os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
+# Ustawienie zmiennej środowiskowej, aby uniknąć problemów z OpenMP jeśli jest to koniczne
+#os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 
 # Wczytaj plik JSON z mapowaniem id2label
 with open('config.json', 'r') as f:
