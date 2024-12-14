@@ -1,0 +1,3 @@
+Link to vgg16 model:
+
+https://drive.google.com/file/d/1AO4zRZmnLEkqHf_08rZT7tJ4uhb18TvU/view?usp=drive_link
