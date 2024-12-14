@@ -1,0 +1,91 @@
+import cv2
+from ultralytics import YOLO
+import numpy as np
+import time
+
+# Path to the pre-trained YOLOv8 model for dog detection
+model_path = 'C:\\Users\\Andrzej\\Downloads\\yolov8_dogface_dataset2_80epochs_best.pt'
+dog_model = YOLO(model_path)
+
+# Path to the video file
+video_path = 'C:\\Users\\Andrzej\\Downloads\\test.mp4'
+
+# Open the video file
+cap = cv2.VideoCapture(video_path)
+if not cap.isOpened():
+    print("Error: Could not open the video.")
+    exit()
+
+# Define the video writer to save the processed video
+fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+out = cv2.VideoWriter('dwa_psy.mp4', fourcc, 30.0, (frame_width, frame_height))
+
+# Initialize tracking variables
+trackers = []
+frame_count = 0
+detection_interval = 1500000  # Re-detection interval, not critical for speed measurement
+total_time = 0  # To store cumulative processing time for all frames
+
+while True:
+    start_time = time.perf_counter()  # Start measuring time for the frame
+
+    ret, frame = cap.read()
+    if not ret:
+        break
+
+    frame_count += 1
+
+    # Perform dog detection every 'detection_interval' frames or when no objects are being tracked
+    if frame_count % detection_interval == 0 or not trackers:
+        trackers.clear()
+        dog_results = dog_model(frame)
+
+        for result in dog_results:
+            for box in result.boxes:
+                if box.cls == 0 and box.conf[0] > 0.6:  # Assuming class 0 corresponds to a dog
+                    x1, y1, x2, y2 = map(int, box.xyxy[0])
+                    #You could use KCF tracker for better speed
+                    tracker = cv2.TrackerCSRT_create()
+                    tracker.init(frame, (x1, y1, x2 - x1, y2 - y1))
+                    dog_color = tuple(np.random.randint(0, 255, size=3).tolist())
+                    trackers.append((tracker, dog_color, box.conf[0]))
+
+    # Update all trackers and draw bounding boxes
+    updated_trackers = []
+    for tracker, color, confidence in trackers:
+        success, bbox = tracker.update(frame)
+        if success:
+            x1, y1, w, h = map(int, bbox)
+            x2, y2 = x1 + w, y1 + h
+            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+            cv2.putText(frame, f'{confidence:.2f}', (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+            updated_trackers.append((tracker, color, confidence))
+
+    trackers = updated_trackers  # Replace with successfully updated trackers
+
+    # Calculate the time taken to process this frame
+    end_time = time.perf_counter()
+    frame_time = end_time - start_time
+    total_time += frame_time
+
+    # Write the processed frame to the output video
+    out.write(frame)
+
+    # Display the frame (optional)
+    cv2.imshow('Frame', frame)
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+# Calculate the average processing time per frame and frames per second (FPS)
+average_time_per_frame = total_time / frame_count
+fps = 1 / average_time_per_frame if average_time_per_frame > 0 else 0
+
+print(f"Average processing time per frame: {average_time_per_frame:.4f} seconds")
+print(f"FPS (Frames per second): {fps:.2f}")
+
+# Release video objects
+cap.release()
+out.release()
+cv2.destroyAllWindows()
